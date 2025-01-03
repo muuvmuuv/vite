@@ -36,8 +36,8 @@ export interface CommonServerOptions {
   /**
    * Configure custom proxy rules for the dev server. Expects an object
    * of `{ key: options }` pairs.
-   * Uses [`http-proxy`](https://github.com/http-party/node-http-proxy).
-   * Full options [here](https://github.com/http-party/node-http-proxy#options).
+   * Uses [`httpxy`](https://github.com/unjs/httpxy) which is 100% api compatible to the old `node-http-proxy`.
+   * Full options here on [`node-http-proxy`](https://github.com/http-party/node-http-proxy#options) GitHub.
    *
    * Example `vite.config.js`:
    * ``` js

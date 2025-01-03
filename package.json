@@ -101,7 +101,6 @@
       "vite": "workspace:*"
     },
     "patchedDependencies": {
-      "http-proxy@1.18.1": "patches/http-proxy@1.18.1.patch",
       "sirv@3.0.0": "patches/sirv@3.0.0.patch",
       "chokidar@3.6.0": "patches/chokidar@3.6.0.patch"
     },
@@ -130,5 +129,8 @@
   },
   "stackblitz": {
     "startCommand": "pnpm --filter='./packages/vite' run dev"
+  },
+  "dependencies": {
+    "vite-plugin-mkcert": "^1.17.6"
   }
 }

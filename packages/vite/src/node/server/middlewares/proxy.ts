@@ -1,8 +1,11 @@
 import type * as http from 'node:http'
 import type * as net from 'node:net'
-import httpProxy from 'http-proxy'
+import {
+  type ProxyServer,
+  type ProxyServerOptions,
+  createProxyServer,
+} from 'httpxy'
 import type { Connect } from 'dep-types/connect'
-import type { HttpProxy } from 'dep-types/http-proxy'
 import colors from 'picocolors'
 import { createDebugger } from '../../utils'
 import type { CommonServerOptions, ResolvedConfig } from '../..'
@@ -10,7 +13,7 @@ import type { HttpServer } from '..'
 
 const debug = createDebugger('vite:proxy')
 
-export interface ProxyOptions extends HttpProxy.ServerOptions {
+export interface ProxyOptions extends ProxyServerOptions {
   /**
    * rewrite path
    */
@@ -18,7 +21,7 @@ export interface ProxyOptions extends HttpProxy.ServerOptions {
   /**
    * configure the proxy server (e.g. listen to events)
    */
-  configure?: (proxy: HttpProxy.Server, options: ProxyOptions) => void
+  configure?: (proxy: ProxyServer, options: ProxyOptions) => void
   /**
    * webpack-dev-server style bypass function
    */
@@ -74,7 +77,7 @@ export function proxyMiddleware(
   config: ResolvedConfig,
 ): Connect.NextHandleFunction {
   // lazy require only when proxy is used
-  const proxies: Record<string, [HttpProxy.Server, ProxyOptions]> = {}
+  const proxies: Record<string, [ProxyServer, ProxyOptions]> = {}
 
   Object.keys(options).forEach((context) => {
     let opts = options[context]
@@ -84,7 +87,7 @@ export function proxyMiddleware(
     if (typeof opts === 'string') {
       opts = { target: opts, changeOrigin: true } as ProxyOptions
     }
-    const proxy = httpProxy.createProxyServer(opts) as HttpProxy.Server
+    const proxy = createProxyServer(opts)
 
     if (opts.configure) {
       opts.configure(proxy, opts)
@@ -131,7 +134,7 @@ export function proxyMiddleware(
     proxy.on('proxyReqWs', (proxyReq, _req, socket, options) => {
       rewriteOriginHeader(proxyReq, options, config)
 
-      socket.on('error', (err) => {
+      socket.on('error', (err: any) => {
         config.logger.error(
           `${colors.red(`ws proxy socket error:`)}\n${err.stack}`,
           {
@@ -142,17 +145,19 @@ export function proxyMiddleware(
       })
     })
 
+    // TODO: needed?
     // https://github.com/http-party/node-http-proxy/issues/1520#issue-877626125
     // https://github.com/chimurai/http-proxy-middleware/blob/cd58f962aec22c925b7df5140502978da8f87d5f/src/plugins/default/debug-proxy-errors-plugin.ts#L25-L37
-    proxy.on('proxyRes', (proxyRes, _req, res) => {
-      res.on('close', () => {
-        if (!res.writableEnded) {
-          debug?.('destroying proxyRes in proxyRes close event')
-          proxyRes.destroy()
-        }
-      })
-    })
+    // proxy.on('proxyRes', (proxyRes, _req, res) => {
+    //   res.on('close', () => {
+    //     if (!res.writableEnded) {
+    //       debug?.('destroying proxyRes in proxyRes close event')
+    //       proxyRes.destroy()
+    //     }
+    //   })
+    // })
 
+    // TODO: needed?
     // clone before saving because http-proxy mutates the options
     proxies[context] = [proxy, { ...opts }]
   })
@@ -165,8 +170,9 @@ export function proxyMiddleware(
           const [proxy, opts] = proxies[context]
           if (
             opts.ws ||
-            opts.target?.toString().startsWith('ws:') ||
-            opts.target?.toString().startsWith('wss:')
+            (typeof opts.target === 'string'
+              ? opts.target.startsWith('ws:') || opts.target.startsWith('wss:')
+              : opts.target?.protocol?.startsWith('ws'))
           ) {
             if (opts.bypass) {
               const bypassResult = opts.bypass(req, undefined, opts)
@@ -199,7 +205,7 @@ export function proxyMiddleware(
     for (const context in proxies) {
       if (doesProxyContextMatchUrl(context, url)) {
         const [proxy, opts] = proxies[context]
-        const options: HttpProxy.ServerOptions = {}
+        const options: ProxyServerOptions = {}
 
         if (opts.bypass) {
           const bypassResult = opts.bypass(req, res, opts)
